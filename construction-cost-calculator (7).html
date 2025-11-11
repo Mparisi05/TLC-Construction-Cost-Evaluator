@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Cost Calculator</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const ConstructionCostCalculator = () => {
+            const SQUARE_FOOTAGE = 3917;
+            
+            const baseBidItems = [
+                { name: "GENERAL REQUIREMENTS", amount: 28240 },
+                { name: "DEMOLITION", amount: 7762 },
+                { name: "CONCRETE", amount: 6440 },
+                { name: "MASONRY", amount: 0 },
+                { name: "METALS", amount: 0 },
+                { name: "DRYWALL", amount: 15590 },
+                { name: "ACOUSTICS", amount: 16326 },
+                { name: "CARPENTRY/MILLWORK", amount: 62299 },
+                { name: "DOORS/HARDWARE", amount: 13934 },
+                { name: "TOILET ACCESSORIES", amount: 0 },
+                { name: "GLASS/GLAZING", amount: 0 },
+                { name: "CERAMIC TILE", amount: 0 },
+                { name: "PAINTING", amount: 6670 },
+                { name: "WALLCOVERING", amount: 0 },
+                { name: "FLOORCOVERING", amount: 31540 },
+                { name: "SPECIALTIES", amount: 13297 },
+                { name: "EQUIPMENT", amount: 3191 },
+                { name: "WINDOW TREATMENT", amount: 0 },
+                { name: "ROOFING", amount: 0 },
+                { name: "HVAC", amount: 28290 },
+                { name: "PLUMBING", amount: 65121 },
+                { name: "SPRINKLER", amount: 0 },
+                { name: "ELECTRICAL", amount: 56120 },
+                { name: "SUITE SIGNAGE", amount: 250 }
+            ];
+
+            const BASE_BID_TOTAL = 354820;
+
+            const [showBaseBidDetails, setShowBaseBidDetails] = useState(false);
+            const [contingencyPercent, setContingencyPercent] = useState(5);
+            const [cmFeePercent] = useState(4);
+            const [architecturalFees, setArchitecturalFees] = useState(10000);
+            const [mepDrawings] = useState(5860);
+            
+            // Tenant-purchased items (no CM fee or contingency)
+            const [tenantItems, setTenantItems] = useState([
+                { name: "Dishwasher (delivered & installed)", amount: 960 },
+                { name: "", amount: 0 },
+                { name: "", amount: 0 },
+                { name: "", amount: 0 },
+                { name: "", amount: 0 }
+            ]);
+            
+            // Financing inputs - hardcoded values
+            const tiAllowance = 235020;
+            const freeRentValue = 80769;
+            
+            const [alternates, setAlternates] = useState([
+                { 
+                    id: 'a1', 
+                    name: 'A1 - Replace 5 Flat Panel LED\'s with 15 downlights', 
+                    baseAmount: 4300, 
+                    selected: false,
+                    hasCeilingOption: true,
+                    ceilingSelected: false,
+                    ceilingCost: 4500
+                },
+                { 
+                    id: 'a2', 
+                    name: 'A2 - Replace 15 Flat Panel LED\'s with 22 downlights', 
+                    baseAmount: 3800, 
+                    selected: true,
+                    hasCeilingOption: true,
+                    ceilingSelected: false,
+                    ceilingCost: 6500
+                },
+                { 
+                    id: 'add1', 
+                    name: 'ADD - 2x Glass inserts in entry way doors', 
+                    baseAmount: 2600, 
+                    selected: false,
+                    hasCeilingOption: false
+                },
+                { 
+                    id: 'add2', 
+                    name: 'ADD - Monument Signage', 
+                    baseAmount: 450, 
+                    selected: true,
+                    hasCeilingOption: false
+                }
+            ]);
+
+            const toggleAlternate = (id) => {
+                setAlternates(alternates.map(alt => 
+                    alt.id === id ? { ...alt, selected: !alt.selected } : alt
+                ));
+            };
+
+            const toggleCeiling = (id) => {
+                setAlternates(alternates.map(alt => 
+                    alt.id === id ? { ...alt, ceilingSelected: !alt.ceilingSelected } : alt
+                ));
+            };
+
+            const updateTenantItem = (index, field, value) => {
+                const newItems = [...tenantItems];
+                newItems[index][field] = value;
+                setTenantItems(newItems);
+            };
+
+            const calculateWithCMFee = (baseAmount) => {
+                const cmFee = baseAmount * (cmFeePercent / 100);
+                return baseAmount + cmFee;
+            };
+
+            const formatCurrency = (amount) => {
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(amount);
+            };
+
+            const formatPerSF = (amount) => {
+                return `$${(amount / SQUARE_FOOTAGE).toFixed(2)}/SF`;
+            };
+
+            // Calculate Base Bid totals
+            const baseBidWithCM = calculateWithCMFee(BASE_BID_TOTAL);
+            const baseBidContingency = baseBidWithCM * (contingencyPercent / 100);
+            const baseBidTotal = baseBidWithCM + baseBidContingency;
+            
+            // Calculate Soft Costs
+            const totalSoftCosts = architecturalFees + mepDrawings;
+            
+            // Calculate Tenant-Purchased Items (no fees)
+            const tenantItemsTotal = tenantItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+            
+            // Calculate Alternates totals
+            const selectedAlternatesBaseTotal = alternates.reduce((sum, alt) => {
+                if (!alt.selected) return sum;
+                
+                let altTotal = alt.baseAmount;
+                if (alt.hasCeilingOption && alt.ceilingSelected) {
+                    altTotal += alt.ceilingCost;
+                }
+                
+                return sum + altTotal;
+            }, 0);
+            
+            const selectedAlternatesWithCM = calculateWithCMFee(selectedAlternatesBaseTotal);
+            const alternatesContingency = selectedAlternatesWithCM * (contingencyPercent / 100);
+            const selectedAlternatesTotal = selectedAlternatesWithCM + alternatesContingency;
+
+            const grandTotal = baseBidTotal + totalSoftCosts + tenantItemsTotal + selectedAlternatesTotal;
+
+            // Financing calculations
+            const tiApplied = Math.min(tiAllowance, grandTotal);
+            const remainingAfterTI = Math.max(0, grandTotal - tiApplied);
+            const freeRentApplied = Math.min(freeRentValue, remainingAfterTI);
+            const loanAmount = Math.max(0, remainingAfterTI - freeRentApplied);
+
+            return (
+                <div className="max-w-6xl mx-auto p-6">
+                    <div className="bg-white rounded-lg shadow-lg p-8">
+                        <h1 className="text-3xl font-bold mb-2 text-gray-800">Construction Cost Calculator</h1>
+                        <p className="text-gray-600 mb-8">Project Size: {SQUARE_FOOTAGE.toLocaleString()} SF</p>
+
+                        {/* Controls */}
+                        <div className="bg-blue-50 rounded-lg p-6 mb-8">
+                            <h2 className="text-xl font-semibold mb-4 text-gray-800">Project Parameters</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Contingency: {contingencyPercent}%
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        step="0.5"
+                                        value={contingencyPercent}
+                                        onChange={(e) => setContingencyPercent(parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                        <span>0%</span>
+                                        <span>10%</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Construction Management Fee: {cmFeePercent}%
+                                    </label>
+                                    <div className="text-2xl font-semibold text-gray-600">{cmFeePercent}%</div>
+                                    <p className="text-xs text-gray-500 mt-1">Applied to hard costs only</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Base Bid Section */}
+                        <div className="mb-8">
+                            <div className="bg-gray-100 rounded-t-lg p-4">
+                                <button
+                                    onClick={() => setShowBaseBidDetails(!showBaseBidDetails)}
+                                    className="w-full flex items-center justify-between text-left"
+                                >
+                                    <div className="flex items-center space-x-3">
+                                        <span className={`transform transition-transform ${showBaseBidDetails ? 'rotate-90' : ''}`}>
+                                            ▶
+                                        </span>
+                                        <h2 className="text-xl font-bold text-gray-800">BASE BID - Hard Costs</h2>
+                                    </div>
+                                    <div className="flex items-center space-x-8">
+                                        <span className="text-xl font-bold text-gray-800">{formatCurrency(baseBidTotal)}</span>
+                                        <span className="text-lg text-gray-600 w-24 text-right">{formatPerSF(baseBidTotal)}</span>
+                                    </div>
+                                </button>
+                            </div>
+
+                            {showBaseBidDetails && (
+                                <div className="bg-white border border-gray-200 rounded-b-lg">
+                                    <div className="p-4 space-y-2">
+                                        {/* Header row */}
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-300 font-semibold text-sm text-gray-600">
+                                            <span className="flex-1">Line Item</span>
+                                            <span className="w-32 text-right">GC Bid</span>
+                                            <span className="w-32 text-right">w/ CM Fee</span>
+                                            <span className="w-24 text-right">$/SF</span>
+                                        </div>
+                                        
+                                        {baseBidItems.map((item, index) => {
+                                            const itemWithCM = calculateWithCMFee(item.amount);
+                                            return (
+                                                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                                                    <span className="text-gray-700 flex-1">{item.name}</span>
+                                                    <span className="text-gray-600 w-32 text-right">{formatCurrency(item.amount)}</span>
+                                                    <span className="text-gray-800 font-medium w-32 text-right">{formatCurrency(itemWithCM)}</span>
+                                                    <span className="text-gray-600 w-24 text-right">{formatPerSF(itemWithCM)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                        
+                                        <div className="pt-4 mt-4 border-t-2 border-gray-300">
+                                            <div className="flex justify-between items-center py-1 text-sm">
+                                                <span className="text-gray-700 font-medium">Base Bid Subtotal</span>
+                                                <span className="text-gray-600 w-32 text-right">{formatCurrency(BASE_BID_TOTAL)}</span>
+                                                <span className="text-gray-800 font-semibold w-32 text-right">{formatCurrency(baseBidWithCM)}</span>
+                                                <span className="text-gray-600 w-24 text-right">{formatPerSF(baseBidWithCM)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center py-1 text-sm mt-2">
+                                                <span className="text-gray-700 font-medium">Contingency ({contingencyPercent}%)</span>
+                                                <span className="w-32"></span>
+                                                <span className="text-gray-800 font-semibold w-32 text-right">{formatCurrency(baseBidContingency)}</span>
+                                                <span className="text-gray-600 w-24 text-right">{formatPerSF(baseBidContingency)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Soft Costs Section */}
+                        <div className="mb-8 bg-gray-50 rounded-lg p-6">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">SOFT COSTS</h2>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Architectural Fees
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={architecturalFees}
+                                            onChange={(e) => setArchitecturalFees(parseFloat(e.target.value) || 0)}
+                                            className="w-48 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                    <div className="flex items-center space-x-8">
+                                        <span className="text-xl font-bold text-gray-800">{formatCurrency(architecturalFees)}</span>
+                                        <span className="text-lg text-gray-600 w-24 text-right">{formatPerSF(architecturalFees)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                    <div className="flex-1">
+                                        <span className="block text-sm font-medium text-gray-700">
+                                            MEP Drawings for Permit
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center space-x-8">
+                                        <span className="text-xl font-bold text-gray-800">{formatCurrency(mepDrawings)}</span>
+                                        <span className="text-lg text-gray-600 w-24 text-right">{formatPerSF(mepDrawings)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300">
+                                    <span className="text-lg font-semibold text-gray-800">Total Soft Costs</span>
+                                    <div className="flex items-center space-x-8">
+                                        <span className="text-xl font-bold text-gray-800">{formatCurrency(totalSoftCosts)}</span>
+                                        <span className="text-lg text-gray-600 w-24 text-right">{formatPerSF(totalSoftCosts)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-4">No contingency or CM fee applied to soft costs</p>
+                        </div>
+
+                        {/* Alternates Section */}
+                        <div className="mb-8">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4 bg-gray-100 p-4 rounded-t-lg">ALTERNATES</h2>
+                            <div className="bg-white border border-gray-200 rounded-b-lg p-4 space-y-4">
+                                {/* Header row */}
+                                <div className="flex justify-between items-center pb-2 border-b-2 border-gray-300 font-semibold text-sm text-gray-600">
+                                    <span className="flex-1">Alternate Item</span>
+                                    <span className="w-28 text-right">Base Cost</span>
+                                    <span className="w-28 text-right">w/ CM Fee</span>
+                                    <span className="w-24 text-right">$/SF</span>
+                                </div>
+                                
+                                {alternates.map((alt) => {
+                                    let altAmount = alt.baseAmount;
+                                    if (alt.hasCeilingOption && alt.ceilingSelected) {
+                                        altAmount += alt.ceilingCost;
+                                    }
+                                    
+                                    const altWithCM = calculateWithCMFee(altAmount);
+                                    
+                                    return (
+                                        <div key={alt.id} className="border border-gray-200 rounded-lg p-4">
+                                            <div className="flex items-start justify-between mb-2">
+                                                <div className="flex items-start space-x-3 flex-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={alt.selected}
+                                                        onChange={() => toggleAlternate(alt.id)}
+                                                        className="mt-1 h-5 w-5 text-blue-600 rounded focus:ring-blue-500"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <span className="text-gray-800 font-medium">{alt.name}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center space-x-4">
+                                                    <span className={`text-sm w-28 text-right ${alt.selected ? 'text-gray-600' : 'text-gray-400'}`}>
+                                                        {formatCurrency(altAmount)}
+                                                    </span>
+                                                    <span className={`text-lg font-semibold w-28 text-right ${alt.selected ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                        {formatCurrency(altWithCM)}
+                                                    </span>
+                                                    <span className={`text-md w-24 text-right ${alt.selected ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                        {formatPerSF(altWithCM)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            
+                                            {alt.hasCeilingOption && (
+                                                <div className="ml-8 mt-3 pl-4 border-l-2 border-gray-200">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={alt.ceilingSelected}
+                                                                onChange={() => toggleCeiling(alt.id)}
+                                                                disabled={!alt.selected}
+                                                                className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                                                            />
+                                                            <span className={`text-sm ${alt.selected ? 'text-gray-700' : 'text-gray-400'}`}>
+                                                                Add drywall finished ceiling
+                                                            </span>
+                                                        </div>
+                                                        <span className={`text-sm ${alt.selected && alt.ceilingSelected ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                            +{formatCurrency(calculateWithCMFee(alt.ceilingCost))}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                
+                                {selectedAlternatesBaseTotal > 0 && (
+                                    <div className="pt-4 mt-4 border-t-2 border-gray-300">
+                                        <div className="flex justify-between items-center py-1 text-sm">
+                                            <span className="text-gray-700 font-medium">Selected Alternates Subtotal</span>
+                                            <span className="text-gray-600 w-28 text-right">{formatCurrency(selectedAlternatesBaseTotal)}</span>
+                                            <span className="text-gray-800 font-semibold w-28 text-right">{formatCurrency(selectedAlternatesWithCM)}</span>
+                                            <span className="text-gray-600 w-24 text-right">{formatPerSF(selectedAlternatesWithCM)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-1 text-sm mt-2">
+                                            <span className="text-gray-700 font-medium">Contingency ({contingencyPercent}%)</span>
+                                            <span className="w-28"></span>
+                                            <span className="text-gray-800 font-semibold w-28 text-right">{formatCurrency(alternatesContingency)}</span>
+                                            <span className="text-gray-600 w-24 text-right">{formatPerSF(alternatesContingency)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2 mt-2 border-t border-gray-200 pt-2">
+                                            <span className="text-lg font-semibold text-gray-800">Total Selected Alternates</span>
+                                            <span className="w-28"></span>
+                                            <span className="text-lg font-bold text-blue-600 w-28 text-right">{formatCurrency(selectedAlternatesTotal)}</span>
+                                            <span className="text-md text-blue-600 w-24 text-right">{formatPerSF(selectedAlternatesTotal)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Tenant-Purchased Items Section */}
+                        <div className="mb-8 bg-purple-50 rounded-lg p-6">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">TENANT-PURCHASED ITEMS</h2>
+                            <p className="text-sm text-gray-600 mb-4">Items purchased directly by tenant - no CM fee or contingency applied</p>
+                            <div className="space-y-3">
+                                {tenantItems.map((item, index) => (
+                                    <div key={index} className="flex justify-between items-center bg-white rounded-lg p-3">
+                                        <div className="flex-1 mr-4 flex items-center space-x-3">
+                                            <input
+                                                type="text"
+                                                value={item.name}
+                                                onChange={(e) => updateTenantItem(index, 'name', e.target.value)}
+                                                placeholder="Item description"
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                                            />
+                                            {index === 0 && item.name.toLowerCase().includes('dishwasher') && (
+                                                <a
+                                                    href="https://www.homedepot.com/p/GE-24-in-Built-In-Stainless-Steel-Top-Control-ADA-Dishwasher-with-Stainless-Steel-Tub-and-51-dBA-GDT225SSLSS/305891073"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                                                >
+                                                    View Product
+                                                </a>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center space-x-6">
+                                            <input
+                                                type="number"
+                                                value={item.amount || ''}
+                                                onChange={(e) => updateTenantItem(index, 'amount', parseFloat(e.target.value) || 0)}
+                                                placeholder="Amount"
+                                                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-right"
+                                            />
+                                            <span className="text-lg font-semibold text-gray-800 w-28 text-right">
+                                                {formatCurrency(item.amount || 0)}
+                                            </span>
+                                            <span className="text-gray-600 w-24 text-right">
+                                                {formatPerSF(item.amount || 0)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="flex justify-between items-center pt-3 border-t-2 border-gray-300 mt-4">
+                                    <span className="text-lg font-semibold text-gray-800">Total Tenant-Purchased Items</span>
+                                    <div className="flex items-center space-x-6">
+                                        <span className="w-32"></span>
+                                        <span className="text-xl font-bold text-purple-700 w-28 text-right">{formatCurrency(tenantItemsTotal)}</span>
+                                        <span className="text-lg text-purple-700 w-24 text-right">{formatPerSF(tenantItemsTotal)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Project Summary */}
+                        <div className="mb-8 bg-blue-50 rounded-lg p-6 border-2 border-blue-300">
+                            <h2 className="text-xl font-bold text-gray-800 mb-6">PROJECT COST SUMMARY</h2>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 bg-white rounded px-4">
+                                    <span className="text-gray-700 font-medium">Base Bid (Hard Costs)</span>
+                                    <div className="flex items-center space-x-8">
+                                        <span className="text-lg font-semibold text-gray-800">{formatCurrency(baseBidTotal)}</span>
+                                        <span className="text-gray-600 w-24 text-right">{formatPerSF(baseBidTotal)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-center py-2 bg-white rounded px-4">
+                                    <span className="text-gray-700 font-medium">Soft Costs</span>
+                                    <div className="flex items-center space-x-8">
+                                        <span className="text-lg font-semibold text-gray-800">{formatCurrency(totalSoftCosts)}</span>
+                                        <span className="text-gray-600 w-24 text-right">{formatPerSF(totalSoftCosts)}</span>
+                                    </div>
+                                </div>
+                                {selectedAlternatesTotal > 0 && (
+                                    <div className="flex justify-between items-center py-2 bg-white rounded px-4">
+                                        <span className="text-gray-700 font-medium">Alternates</span>
+                                        <div className="flex items-center space-x-8">
+                                            <span className="text-lg font-semibold text-gray-800">{formatCurrency(selectedAlternatesTotal)}</span>
+                                            <span className="text-gray-600 w-24 text-right">{formatPerSF(selectedAlternatesTotal)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                {tenantItemsTotal > 0 && (
+                                    <div className="flex justify-between items-center py-2 bg-white rounded px-4">
+                                        <span className="text-gray-700 font-medium">Tenant-Purchased Items</span>
+                                        <div className="flex items-center space-x-8">
+                                            <span className="text-lg font-semibold text-gray-800">{formatCurrency(tenantItemsTotal)}</span>
+                                            <span className="text-gray-600 w-24 text-right">{formatPerSF(tenantItemsTotal)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center py-3 bg-blue-600 text-white rounded px-4 mt-4">
+                                    <span className="text-xl font-bold">TOTAL PROJECT COST</span>
+                                    <div className="flex items-center space-x-8">
+                                        <span className="text-2xl font-bold">{formatCurrency(grandTotal)}</span>
+                                        <span className="text-lg w-24 text-right">{formatPerSF(grandTotal)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Financing Section */}
+                        <div className="mb-8 bg-green-50 rounded-lg p-6 border-2 border-green-200">
+                            <h2 className="text-xl font-bold text-gray-800 mb-6">FINANCING STRUCTURE</h2>
+                            
+                            <div className="space-y-4">
+                                {/* TI Allowance */}
+                                <div className="bg-white rounded-lg p-4 border border-green-200">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Tenant Improvement (TI) Allowance
+                                            </label>
+                                            <p className="text-gray-600">Landlord-provided allowance</p>
+                                        </div>
+                                        <div className="flex items-center space-x-8">
+                                            <span className="text-xl font-bold text-green-700">{formatCurrency(tiApplied)}</span>
+                                            <span className="text-lg text-gray-600 w-24 text-right">{formatPerSF(tiApplied)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Free Rent Value */}
+                                <div className="bg-white rounded-lg p-4 border border-green-200">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Free Rent Value
+                                            </label>
+                                            <p className="text-gray-600">Free rent converted to capital</p>
+                                        </div>
+                                        <div className="flex items-center space-x-8">
+                                            <span className="text-xl font-bold text-green-700">{formatCurrency(freeRentApplied)}</span>
+                                            <span className="text-lg text-gray-600 w-24 text-right">{formatPerSF(freeRentApplied)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Loan Amount */}
+                                <div className="bg-amber-50 rounded-lg p-4 border-2 border-amber-300">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex-1">
+                                            <label className="block text-sm font-semibold text-gray-700 mb-1">
+                                                Loan Required
+                                            </label>
+                                            <p className="text-xs text-gray-500">Remaining balance after TI and free rent</p>
+                                        </div>
+                                        <div className="flex items-center space-x-8">
+                                            <span className="text-2xl font-bold text-amber-700">{formatCurrency(loanAmount)}</span>
+                                            <span className="text-lg text-amber-600 w-24 text-right">{formatPerSF(loanAmount)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Financing Summary */}
+                            <div className="mt-6 bg-white rounded-lg p-4 border border-gray-300">
+                                <h3 className="text-sm font-semibold text-gray-700 mb-3">Financing Breakdown</h3>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between py-1">
+                                        <span className="text-gray-600">Total Project Cost</span>
+                                        <span className="text-gray-800 font-semibold">{formatCurrency(grandTotal)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-1 border-t border-gray-200 pt-2">
+                                        <span className="text-green-700">Less: TI Allowance</span>
+                                        <span className="text-green-700 font-medium">({formatCurrency(tiApplied)})</span>
+                                    </div>
+                                    <div className="flex justify-between py-1">
+                                        <span className="text-gray-600">Balance After TI</span>
+                                        <span className="text-gray-800 font-medium">{formatCurrency(remainingAfterTI)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-1 border-t border-gray-200 pt-2">
+                                        <span className="text-green-700">Less: Free Rent Value</span>
+                                        <span className="text-green-700 font-medium">({formatCurrency(freeRentApplied)})</span>
+                                    </div>
+                                    <div className="flex justify-between py-2 border-t-2 border-gray-300 pt-3">
+                                        <span className="text-gray-800 font-semibold">Tenant Loan Amount</span>
+                                        <span className="text-amber-700 font-bold text-lg">{formatCurrency(loanAmount)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Cost Breakdown Details */}
+                        <div className="mt-6 bg-gray-50 rounded-lg p-4">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-3">Fee Breakdown Details</h3>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">CM Fee Rate</span>
+                                    <span className="text-gray-800 font-medium">{cmFeePercent}%</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Contingency Rate</span>
+                                    <span className="text-gray-800 font-medium">{contingencyPercent}%</span>
+                                </div>
+                                <div className="flex justify-between border-t pt-2 mt-2">
+                                    <span className="text-gray-600">Total CM Fees</span>
+                                    <span className="text-gray-800 font-medium">
+                                        {formatCurrency((BASE_BID_TOTAL * cmFeePercent / 100) + (selectedAlternatesBaseTotal * cmFeePercent / 100))}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Total Contingency</span>
+                                    <span className="text-gray-800 font-medium">
+                                        {formatCurrency(baseBidContingency + alternatesContingency)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<ConstructionCostCalculator />, document.getElementById('root'));
+    </script>
+</body>
+</html>
